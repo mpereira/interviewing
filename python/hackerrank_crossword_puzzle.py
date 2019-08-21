@@ -54,7 +54,7 @@ def parse_crossword(crossword_input):
 #    {[[[0 0] [0 3]]
 #      [[0 1] [4 1]]] [0 1]}
 #
-# 4. create 'possible_range_words_by_length' by matching 'words_by_length' with
+# 4. create 'possible_range_words' by matching 'words_by_length' with
 #    'range_lenghts'
 #
 #    {[[0 0] [0 3]] ["ABBA" "BREW"]
@@ -147,11 +147,14 @@ def fill_range(matrix, _range, value):
     end = _range[1]
     for i in range(start[0], end[0] + 1):
         for j in range(start[1], end[1] + 1):
-            matrix[i][j] = value
+            if matrix[i][j]:
+                matrix[i][j].append(value)
+            else:
+                matrix[i][j] = [value]
     return matrix
 
 
-def find_ranges_starting_at(crossword, cells_in_ranges, starting_cell):
+def find_ranges_starting_at(crossword, cells_ranges, starting_cell):
     if not is_blank_cell(crossword, starting_cell):
         return set()
 
@@ -165,7 +168,7 @@ def find_ranges_starting_at(crossword, cells_in_ranges, starting_cell):
     # TODO: refactor into function that can be reused in the code block below.
     if (
         _cell_below
-        and not get_cell(cells_in_ranges, _cell_below)
+        and not get_cell(cells_ranges, _cell_below)
         and is_blank_cell(crossword, _cell_below)
     ):
         current_cell = _cell_below.copy()
@@ -189,7 +192,7 @@ def find_ranges_starting_at(crossword, cells_in_ranges, starting_cell):
     # TODO: refactor into function that can be reused in the code block above.
     if (
         _cell_to_the_right
-        and not get_cell(cells_in_ranges, _cell_to_the_right)
+        and not get_cell(cells_ranges, _cell_to_the_right)
         and is_blank_cell(crossword, _cell_to_the_right)
     ):
         current_cell = _cell_to_the_right.copy()
@@ -226,51 +229,59 @@ def solve(crossword, words):
         else:
             words_by_length[word_length] = [word]
 
-    cells_in_ranges = make_2d_matrix(number_of_rows, number_of_columns, 0)
+    cells_ranges = make_2d_matrix(number_of_rows, number_of_columns, 0)
     ranges = set()
     for i in range(number_of_rows):
         for j in range(number_of_columns):
             cell = [i, j]
-            _cell_to_the_right = cell_to_the_right(cells_in_ranges, cell)
-            _cell_below = cell_below(cells_in_ranges, cell)
+            _cell_to_the_right = cell_to_the_right(cells_ranges, cell)
+            _cell_below = cell_below(cells_ranges, cell)
 
             if is_blank_cell(crossword, cell):
-                _ranges = find_ranges_starting_at(crossword, cells_in_ranges, cell)
+                _ranges = find_ranges_starting_at(crossword, cells_ranges, cell)
                 for _range in _ranges:
-                    ranges.add(make_hash_key(_range))
-                    # TODO: idea: fill cells with ranges that contain them.
-                    # Example: cell [0, 0] might contain ranges A and B. Then we can
-                    # get intersections easily.
-                    fill_range(cells_in_ranges, _range, 1)
+                    range_key = make_hash_key(_range)
+                    ranges.add(range_key)
+                    fill_range(cells_ranges, _range, _range)
 
     range_lengths = {}
     for range_key in ranges:
         _range = parse_hash_key(range_key)
         range_lengths[range_key] = range_length(_range)
 
+
+    ranges_intersections = {}
+    for i in range(number_of_rows):
+        for j in range(number_of_columns):
+            ranges_in_cell = cells_ranges[i][j]
+            if ranges_in_cell and len(ranges_in_cell) > 1:
+                ranges_intersections[make_hash_key(ranges_in_cell)] = [i, j]
+
+    possible_range_words = {}
+    for range_key, _range_length in range_lengths.items():
+        possible_range_words[range_key] = words_by_length[_range_length]
+
+    # 5. for each 'ranges_intersections', check which candidates match the
+    #    intersecting character by getting 'range_lenghts' and
+    #    'words_by_length', creating 'intersecting_ranges_solutions'
+    #
+    #    {[[[0 0] [0 3]] [[0 1] [4 1]]] [["BREW" "RANGE"]]}
+
+    # 6. some 'intersecting_ranges_solutions' will only have 1 solution. fill those
+    #    and remove them from the set of 'pending_words'
+
+    # 7. for the remaining 'intersecting_ranges_solutions', try all possible
+    #    combinations
+
     return {
+        "possible_range_words": possible_range_words,
+        "ranges_intersections": ranges_intersections,
         "words_by_length": words_by_length,
         "ranges": ranges,
         "range_lengths": range_lengths,
-        "cells_in_ranges": cells_in_ranges,
+        "cells_ranges": cells_ranges,
         "crossword": crossword,
     }
-
-
-def ranges_intersection(crossword, r1, r2):
-    r1_start = r1[0]
-    r1_end = r1[1]
-    r2_start = r2[0]
-    r2_end = r2[2]
-    for i in range(r1_start[0], r1_end[0]):
-        pass
-    for j in range(r1_start[1], r1_end[1]):
-        pass
-
-
-print(ranges_intersection(crossword,
-                          [[0, 1], [5, 1]],
-                          [[3, 1], [3, 5]]))
 
 
 pprint(solve(crossword, words))
