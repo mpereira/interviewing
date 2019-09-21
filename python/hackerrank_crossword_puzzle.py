@@ -1,15 +1,11 @@
-#!/bin/python3
+#!/usr/bin/env python3
 
 from pprint import pprint
 
 from copy import deepcopy
 from itertools import permutations
 import json
-import math
 import os
-import random
-import re
-import sys
 
 
 # helpers.
@@ -114,13 +110,17 @@ def is_word_cell(crossword, cell):
 
 def cell_to_the_right(matrix, cell):
     _cell_to_the_right = [cell[0], cell[1] + 1]
-    if _cell_to_the_right[0] < len(matrix) and _cell_to_the_right[1] < len(matrix[0]):
+    if _cell_to_the_right[0] < len(matrix) and _cell_to_the_right[1] < len(
+        matrix[0]
+    ):
         return _cell_to_the_right
 
 
 def cell_to_the_left(matrix, cell):
     _cell_to_the_left = [cell[0], cell[1] - 1]
-    if _cell_to_the_left[0] < len(matrix) and _cell_to_the_left[1] < len(matrix[0]):
+    if _cell_to_the_left[0] < len(matrix) and _cell_to_the_left[1] < len(
+        matrix[0]
+    ):
         return _cell_to_the_left
 
 
@@ -277,8 +277,8 @@ def solve(crossword, words):
     for i in range(number_of_rows):
         for j in range(number_of_columns):
             cell = [i, j]
-            _cell_to_the_right = cell_to_the_right(cells_ranges, cell)
-            _cell_below = cell_below(cells_ranges, cell)
+            # _cell_to_the_right = cell_to_the_right(cells_ranges, cell)
+            # _cell_below = cell_below(cells_ranges, cell)
 
             if is_blank_cell(crossword, cell):
                 _ranges = find_crossword_ranges_starting_at(
@@ -325,7 +325,7 @@ def solve(crossword, words):
             )
             del pending_possible_range_words[range_key]
 
-    generate_attempt(possible_range_words)
+    # generate_attempt(possible_range_words)
     print("starting")
     pprint(solved_crossword)
     pprint(pending_possible_range_words)
@@ -338,9 +338,13 @@ def solve(crossword, words):
             for word in list(possible_words):
                 print("trying word in range", word, range_key)
                 _range = unhash_object(range_key)
-                if not string_conflicts_with_range(solved_crossword, _range, word):
+                if not string_conflicts_with_range(
+                    solved_crossword, _range, word
+                ):
                     print("filling word", word)
-                    fill_matrix_range_with_string(solved_crossword, _range, word)
+                    fill_matrix_range_with_string(
+                        solved_crossword, _range, word
+                    )
                     possible_words.remove(word)
                     print("deleting range", range_key)
                     del pending_possible_range_words[range_key]
@@ -402,8 +406,9 @@ def solve(crossword, words):
         unparse_crossword_input(solved_crossword),
     ]
 
+
 # 1. for each length, generate its permutations
-print(list(permutations([['SYDNEY', 'TURKEY', 'EGYPT', 'PARIS'], ['A']])))
+print(list(permutations([["SYDNEY", "TURKEY", "EGYPT", "PARIS"], ["A"]])))
 
 crossword_input_1 = [
     "+-++++++++",
@@ -487,7 +492,9 @@ def crosswordPuzzle(crossword, words):
     # return solve(parse_crossword_input(crossword), parse_crossword_words_input(words))[8][
     #     "7 - solved_crossword"
     # ]
-    return solve(parse_crossword_input(crossword), parse_crossword_words_input(words))
+    return solve(
+        parse_crossword_input(crossword), parse_crossword_words_input(words)
+    )
 
 
 # pprint(crosswordPuzzle(crossword_input_1, words_input_1))
