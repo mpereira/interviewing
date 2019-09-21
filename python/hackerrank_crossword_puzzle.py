@@ -2,6 +2,8 @@
 
 from pprint import pprint
 
+from copy import deepcopy
+from itertools import permutations
 import json
 import math
 import os
@@ -10,14 +12,17 @@ import re
 import sys
 
 
-def make_hash_key(obj):
+# helpers.
+
+
+def hash_object(obj):
     if isinstance(obj, set):
         obj = list(obj)
 
     return json.dumps(obj)
 
 
-def parse_hash_key(key):
+def unhash_object(key):
     return json.loads(key)
 
 
@@ -25,7 +30,7 @@ def make_2d_matrix(rows, columns, value):
     return [[value for i in range(rows)] for j in range(columns)]
 
 
-def parse_crossword(crossword_input):
+def parse_crossword_input(crossword_input):
     number_of_rows = len(crossword_input)
     number_of_columns = len(crossword_input[0])
     crossword = make_2d_matrix(number_of_rows, number_of_columns, None)
@@ -35,7 +40,7 @@ def parse_crossword(crossword_input):
     return crossword
 
 
-def unparse_crossword(crossword):
+def unparse_crossword_input(crossword):
     number_of_rows = len(crossword)
     number_of_columns = len(crossword[0])
     crossword_input = []
@@ -46,45 +51,53 @@ def unparse_crossword(crossword):
     return crossword_input
 
 
-def parse_crossword_words(words_input):
+def parse_crossword_words_input(words_input):
     return words_input.split(";")
 
 
 # concepts:
 #
-# 1. cell
-# 2. range
-# 4. solution
+#   1. cell
+#      a two-element array in the form of '[x, y]'.
+#   2. blank cell
+#      a crossword cell that needs to be filled with a character.
+#   3. range
+#      a two-element array in the form of '[start_cell, end_cell]'.
+#   4. intersection
+#      a cell where two or more ranges intersect.
 #
 # algorithm:
 #
-# 1. get 'words_by_length', with their lengths
+#   1. get a mapping of length to words into 'words_by_length'.
 #
-#    {4 ["ABBA" "BREW"]
-#     5 ["COLIN" "RANGE"]}
+#      {4 ["ABBA" "BREW"]
+#       5 ["COLIN" "RANGE"]}
 #
-# 2. get 'range_lenghts'
+#   2. get all ranges to be filled in the crossword into 'ranges'.
 #
-#    {[[0 0] [0 3]] 4
-#     [[0 1] [4 1]] 5}
+#      [[[0 0] [0 3]]
+#       [[0 1] [4 1]]]
 #
-# 3. get 'ranges_intersections'. there could be more than two ranges for
-#    a given intersection
+#   3. get a mapping of ranges to their lengths into 'range_lengths'.
 #
-#    {[[[0 0] [0 3]]
-#      [[0 1] [4 1]]] [0 1]}
+#      {[[0 0] [0 3]] 4
+#       [[0 1] [4 1]] 5}
 #
-# 4. create 'possible_range_words' by matching 'words_by_length' with
-#    'range_lenghts'
+#   4. get a mapping of intersecting ranges to the cells where they intersect
+#      into 'ranges_intersections'.
 #
-#    {[[0 0] [0 3]] ["ABBA" "BREW"]
-#     [[0 1] [4 1]] ["COLIN" "RANGE"]}
+#      {[[[0 0] [0 3]]
+#        [[0 1] [4 1]]] [0 1]}
 #
-# 5. some 'intersecting_ranges_candidates' will only have 1 solution. fill those
-#    and remove them from the set of 'pending_words'
+#   5. get a mapping of ranges to words which fit them based solely on both
+#      the range lengths (via 'range_lengths') and word lengths (via
+#      'words_by_length') into 'possible_range_words'.
 #
-# 6. for the remaining 'intersecting_ranges_candidates', try all possible
-#    combinations
+#      {[[0 0] [0 3]] ["ABBA" "BREW"]
+#       [[0 1] [4 1]] ["COLIN" "RANGE"]}
+#
+#   6. some 'possible_range_words' will only have 1 candidate word. fill those
+#      and remove them from the set of 'pending_possible_range_words'
 
 
 BLANK_CELL = "-"
@@ -148,7 +161,7 @@ def range_length(_range):
     return row_distance + column_distance
 
 
-def fill_range_with_value(matrix, _range, value):
+def fill_matrix_range_with_value(matrix, _range, value):
     start = _range[0]
     end = _range[1]
     for i in range(start[0], end[0] + 1):
@@ -160,7 +173,7 @@ def fill_range_with_value(matrix, _range, value):
     return matrix
 
 
-def fill_range_with_string(matrix, _range, string):
+def fill_matrix_range_with_string(matrix, _range, string):
     start = _range[0]
     end = _range[1]
     k = 0
@@ -183,7 +196,7 @@ def string_conflicts_with_range(crossword, _range, string):
     return False
 
 
-def find_ranges_starting_at(crossword, cells_ranges, starting_cell):
+def find_crossword_ranges_starting_at(crossword, cells_ranges, starting_cell):
     if not is_blank_cell(crossword, starting_cell):
         return set()
 
@@ -249,6 +262,7 @@ def solve(crossword, words):
     number_of_rows = len(crossword)
     number_of_columns = len(crossword[0])
 
+    # 1. get a mapping of length to words into 'words_by_length'.
     words_by_length = {}
     for word in words:
         word_length = len(word)
@@ -257,6 +271,7 @@ def solve(crossword, words):
         else:
             words_by_length[word_length] = set([word])
 
+    # 2. get all ranges to be filled in the crossword into 'ranges'.
     cells_ranges = make_2d_matrix(number_of_rows, number_of_columns, 0)
     ranges = set()
     for i in range(number_of_rows):
@@ -266,63 +281,129 @@ def solve(crossword, words):
             _cell_below = cell_below(cells_ranges, cell)
 
             if is_blank_cell(crossword, cell):
-                _ranges = find_ranges_starting_at(crossword, cells_ranges, cell)
+                _ranges = find_crossword_ranges_starting_at(
+                    crossword, cells_ranges, cell
+                )
                 for _range in _ranges:
-                    range_key = make_hash_key(_range)
+                    range_key = hash_object(_range)
                     ranges.add(range_key)
-                    fill_range_with_value(cells_ranges, _range, _range)
+                    fill_matrix_range_with_value(cells_ranges, _range, _range)
 
+    # 3. get a mapping of ranges to their lengths into 'range_lengths'.
     range_lengths = {}
     for range_key in ranges:
-        _range = parse_hash_key(range_key)
+        _range = unhash_object(range_key)
         range_lengths[range_key] = range_length(_range)
 
+    # 4. get a mapping of intersecting ranges to the cells where they intersect
+    #    into 'ranges_intersections'.
     ranges_intersections = {}
     for i in range(number_of_rows):
         for j in range(number_of_columns):
             ranges_in_cell = cells_ranges[i][j]
             if ranges_in_cell and len(ranges_in_cell) > 1:
-                ranges_intersections[make_hash_key(ranges_in_cell)] = [i, j]
+                ranges_intersections[hash_object(ranges_in_cell)] = [i, j]
 
+    # 5. get a mapping of ranges to words which fit them based solely on both
+    #    the range lengths (via 'range_lengths') and word lengths (via
+    #    'words_by_length') into 'possible_range_words'.
     possible_range_words = {}
     for range_key, _range_length in range_lengths.items():
         possible_range_words[range_key] = words_by_length[_range_length]
 
-    pending_possible_range_words = possible_range_words.copy()
-    _crossword = crossword.copy()
+    pending_possible_range_words = deepcopy(possible_range_words)
+    solved_crossword = deepcopy(crossword)
 
-    # 5. some 'possible_range_words' will only have 1 candidate. fill those and
-    #    remove them from the set of 'pending_possible_range_words'
+    # 6. some 'possible_range_words' will only have 1 candidate word. fill those
+    #    and remove them from the set of 'pending_possible_range_words'
     for range_key in list(pending_possible_range_words.keys()):
-        possible_words = pending_possible_range_words[range_key].copy()
+        possible_words = pending_possible_range_words[range_key]
         if len(possible_words) == 1:
             possible_word = possible_words.pop()
-            fill_range_with_string(_crossword, parse_hash_key(range_key), possible_word)
+            fill_matrix_range_with_string(
+                solved_crossword, unhash_object(range_key), possible_word
+            )
             del pending_possible_range_words[range_key]
 
-    # 5. for the 'pending_possible_range_words', try all combinations
-    for range_key in list(pending_possible_range_words.keys()):
-        possible_words = pending_possible_range_words[range_key].copy()
-        for word in list(possible_words):
-            _range = parse_hash_key(range_key)
-            if not string_conflicts_with_range(_crossword, _range, word):
-                fill_range_with_string(_crossword, _range, word)
-                possible_words.remove(word)
-                if len(possible_words) == 0:
+    generate_attempt(possible_range_words)
+    print("starting")
+    pprint(solved_crossword)
+    pprint(pending_possible_range_words)
+    pprint(range_lengths)
+    pprint(words_by_length)
+    # 7. for the 'pending_possible_range_words', try all combinations
+    while len(pending_possible_range_words) > 0:
+        for range_key in list(pending_possible_range_words.keys()):
+            possible_words = pending_possible_range_words[range_key]
+            for word in list(possible_words):
+                print("trying word in range", word, range_key)
+                _range = unhash_object(range_key)
+                if not string_conflicts_with_range(solved_crossword, _range, word):
+                    print("filling word", word)
+                    fill_matrix_range_with_string(solved_crossword, _range, word)
+                    possible_words.remove(word)
+                    print("deleting range", range_key)
                     del pending_possible_range_words[range_key]
+        pprint(pending_possible_range_words)
+        pprint(solved_crossword)
 
-    return {
-        "solved_crossword": unparse_crossword(_crossword),
-        "pending_possible_range_words": pending_possible_range_words,
-        "possible_range_words": possible_range_words,
-        "ranges_intersections": ranges_intersections,
-        "words_by_length": words_by_length,
-        "ranges": ranges,
-        "range_lengths": range_lengths,
-        "cells_ranges": cells_ranges,
-        "crossword": _crossword,
-    }
+    # {6: {'SYDNEY', 'TURKEY'},
+    #  5: {'EGYPT', 'PARIS'}}
 
+    # {'[[0, 1], [5, 1]]': {'SYDNEY', 'TURKEY'},
+    #  '[[4, 1], [4, 5]]': {'EGYPT', 'PARIS'},
+    #  '[[4, 5], [9, 5]]': {'SYDNEY', 'TURKEY'},
+    #  '[[6, 3], [6, 7]]': {'EGYPT', 'PARIS'}}
+
+    # {['SYDNEY', 'TURKEY']: [[[0, 1], [5, 1]], [[4, 5], [9, 5]]]
+    #  ['EGYPT', 'PARIS']:   [[[4, 1], [4, 5]], [[6, 3], [6, 7]]]}
+
+    # {[[0, 1], [5, 1]] 'SYDNEY'
+    #  [[4, 5], [9, 5]] 'TURKEY'
+    #  [[4, 1], [4, 5]] 'EGYPT'
+    #  [[6, 3], [6, 7]] 'PARIS'}
+
+    # {[[0, 1], [5, 1]] 'SYDNEY'
+    #  [[4, 5], [9, 5]] 'TURKEY'
+    #  [[4, 1], [4, 5]] 'PARIS'
+    #  [[6, 3], [6, 7]] 'EGYPT'}
+
+    # {[[0, 1], [5, 1]] 'TURKEY'
+    #  [[4, 5], [9, 5]] 'SYDNEY'
+    #  [[4, 1], [4, 5]] 'EGYPT'
+    #  [[6, 3], [6, 7]] 'PARIS'}
+
+    # {[[0, 1], [5, 1]] 'TURKEY'
+    #  [[4, 5], [9, 5]] 'SYDNEY'
+    #  [[4, 1], [4, 5]] 'PARIS'
+    #  [[6, 3], [6, 7]] 'EGYPT'}
+
+    # {'[[0, 1], [5, 1]]': 'TURKEY',
+    #  '[[4, 5], [9, 5]]': 'SYDNEY'}
+
+    return [
+        "0 - crossword",
+        crossword,
+        "1 - words_by_length",
+        words_by_length,
+        "2 - ranges",
+        ranges,
+        "3 - range_lengths",
+        range_lengths,
+        "4 - cells_ranges",
+        cells_ranges,
+        "5 - ranges_intersections",
+        ranges_intersections,
+        "5 - possible_range_words",
+        possible_range_words,
+        "6 - pending_possible_range_words",
+        pending_possible_range_words,
+        "7 - solved_crossword",
+        unparse_crossword_input(solved_crossword),
+    ]
+
+# 1. for each length, generate its permutations
+print(list(permutations([['SYDNEY', 'TURKEY', 'EGYPT', 'PARIS'], ['A']])))
 
 crossword_input_1 = [
     "+-++++++++",
@@ -403,10 +484,10 @@ words_input_5 = "SYDNEY;TURKEY;DETROIT;EGYPT;PARIS"
 
 
 def crosswordPuzzle(crossword, words):
-    # return solve(parse_crossword(crossword), parse_crossword_words(words))[
-    #     "solved_crossword"
+    # return solve(parse_crossword_input(crossword), parse_crossword_words_input(words))[8][
+    #     "7 - solved_crossword"
     # ]
-    return solve(parse_crossword(crossword), parse_crossword_words(words))
+    return solve(parse_crossword_input(crossword), parse_crossword_words_input(words))
 
 
 # pprint(crosswordPuzzle(crossword_input_1, words_input_1))

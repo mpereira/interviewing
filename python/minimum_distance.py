@@ -9,7 +9,7 @@ START_POSITION = (0, 0)
 
 
 def is_valid_position(grid, number_of_rows, number_of_columns, position):
-    return 0 <= position[0] < number_of_columns and 0 <= position[1] < number_of_rows
+    return 0 <= position[0] < number_of_rows and 0 <= position[1] < number_of_columns
 
 
 def get_neighbors(grid, number_of_rows, number_of_columns, origin):
@@ -27,15 +27,31 @@ def bfs(grid, number_of_rows, number_of_columns, start_position, goal):
     queue = collections.deque([[start_position]])
     visited = set([start_position])
     while queue:
+        print("\nstarting")
+        print("queue:", queue)
+        print("queue len:", len(queue))
         path = queue.popleft()
         x, y = path[-1]
-        if grid[y][x] == goal:
+        if grid[x][y] == goal:
             return path
         neighbors = get_neighbors(grid, number_of_rows, number_of_columns, (x, y))
+        print("path:", path)
+        print((x, y), "neighbors:", neighbors)
         for nx, ny in neighbors:
-            if grid[ny][nx] != TRENCH and (nx, ny) not in visited:
+            if grid[nx][ny] != TRENCH and (nx, ny) not in visited:
+                if grid[nx][ny] == FLAT:
+                    _value = "flat"
+                elif grid[nx][ny] == TRENCH:
+                    _value = "trench"
+                elif grid[nx][ny] == OBSTACLE:
+                    _value = "obstacle"
+                else:
+                    _value = "?"
+                print((nx, ny), "is", _value)
                 queue.append(path + [(nx, ny)])
+                print("'queue' updated with", path + [(nx, ny)], ":", queue)
                 visited.add((nx, ny))
+                print("'visited' updated:", visited)
 
 
 def removeObstacle(numRows, numColumns, lot):
@@ -43,29 +59,31 @@ def removeObstacle(numRows, numColumns, lot):
 
 
 grid = [
-    [FLAT, TRENCH, TRENCH, FLAT],
-    [FLAT, TRENCH, TRENCH, FLAT],
-    [FLAT, OBSTACLE, FLAT, FLAT],
-    [FLAT, FLAT, FLAT, FLAT],
+    [FLAT, TRENCH,   FLAT,   FLAT,   FLAT,    FLAT],
+    [FLAT, TRENCH,   FLAT,   TRENCH, TRENCH,  FLAT],
+    [FLAT, FLAT,     FLAT,   TRENCH, TRENCH,  FLAT],
+    [FLAT, TRENCH,   TRENCH, TRENCH, TRENCH,  FLAT],
+    [FLAT, FLAT,     FLAT,   FLAT,   TRENCH,  FLAT],
+    [FLAT, TRENCH,   TRENCH, FLAT,   TRENCH,  OBSTACLE],
 ]
 
 def generate_tile():
     return
 
-new_grid: list = []
+# new_grid: list = []
 
-for i in range(10):
-    new_grid.append([])
-    for j in range(10):
-        new_grid[i].append(generate_tile())
+# for i in range(10):
+#     new_grid.append([])
+#     for j in range(10):
+#         new_grid[i].append(generate_tile())
 
-pprint(new_grid)
+# pprint(new_grid)
 
-# number_of_rows = 3
-# number_of_columns = 3
+number_of_rows = len(grid)
+number_of_columns = len(grid[0])
 
-# print(get_neighbors(grid, number_of_rows, number_of_columns, START_POSITION))
+# print(get_neighbors(grid, number_of_rows, number_of_columns, (2, 0)))
 
 # pprint(grid, width=40)
 
-# pprint(bfs(grid, number_of_rows, number_of_columns, (0, 0), OBSTACLE))
+pprint(bfs(grid, number_of_rows, number_of_columns, (0, 0), OBSTACLE))
